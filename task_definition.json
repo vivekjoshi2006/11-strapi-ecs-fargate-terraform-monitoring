@@ -1,0 +1,20 @@
+{
+  "family": "strapi-task",
+  "containerDefinitions": [
+    {
+      "name": "strapi",
+      "image": "REPLACE_ME_WITH_ECR_URL",
+      "portMappings": [
+        { "containerPort": 1337, "hostPort": 1337 }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/strapi",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
