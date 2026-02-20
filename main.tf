@@ -1,39 +1,93 @@
-resource "aws_cloudwatch_log_group" "strapi" {
+provider "aws" {
+  region = "us-east-1"
+}
+
+# 1. ECR Repository
+resource "aws_ecr_repository" "strapi" {
+  name                 = "strapi-ecs-fargate-terraform-monitoring"
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
+}
+
+# 2. CloudWatch Logs
+resource "aws_cloudwatch_log_group" "strapi_logs" {
   name              = "/ecs/strapi"
   retention_in_days = 7
 }
 
+# 3. Networking
+resource "aws_vpc" "main" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_hostnames = true
+}
+
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  map_public_ip_on_launch = true
+}
+
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.main.id
+}
+
+resource "aws_route_table" "rt" {
+  vpc_id = aws_vpc.main.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+}
+
+resource "aws_route_table_association" "a" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.rt.id
+}
+
+# 4. Security Group
+resource "aws_security_group" "strapi_sg" {
+  name   = "strapi-sg"
+  vpc_id = aws_vpc.main.id
+
+  ingress {
+    from_port   = 1337
+    to_port     = 1337
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# 5. ECS Cluster
 resource "aws_ecs_cluster" "main" {
-  name = "strapi-cluster"
+  name = "strapi-cluster-v3" # New name to avoid previous "idempotent" errors
+
   setting {
     name  = "containerInsights"
     value = "enabled"
   }
 }
 
-# 2. ECS Cluster with Container Insights (Metrics)
-resource "aws_ecs_cluster" "main" {
-  name = "strapi-cluster"
-
-  setting {
-    name  = "containerInsights"
-    value = "enabled"
-  }
-}
-
-# 3. ECS Task Definition with Logging Configuration
+# 6. Task Definition
 resource "aws_ecs_task_definition" "strapi" {
   family                   = "strapi-task"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = "512"
   memory                   = "1024"
-  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  execution_role_arn       = "arn:aws:iam::811738710312:role/ecsTaskExecutionRole"
+  task_role_arn            = "arn:aws:iam::811738710312:role/ecsTaskExecutionRole"
 
   container_definitions = jsonencode([
     {
       name      = "strapi"
-      image     = "${aws_ecr_repository.strapi.repository_url}:latest"
+      image     = "811738710312.dkr.ecr.us-east-1.amazonaws.com/strapi-ecs-fargate-terraform-monitoring:latest"
       essential = true
       portMappings = [
         {
@@ -51,4 +105,19 @@ resource "aws_ecs_task_definition" "strapi" {
       }
     }
   ])
+}
+
+# 7. ECS Service
+resource "aws_ecs_service" "main" {
+  name            = "strapi-service"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.strapi.arn # Referencing the ARN of the resource above
+  launch_type     = "FARGATE"
+  desired_count   = 1
+
+  network_configuration {
+    subnets          = [aws_subnet.public.id]
+    security_groups  = [aws_security_group.strapi_sg.id]
+    assign_public_ip = true
+  }
 }
