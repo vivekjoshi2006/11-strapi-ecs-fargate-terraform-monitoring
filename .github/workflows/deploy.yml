@@ -47,4 +47,4 @@ jobs:
         task-definition: ${{ steps.task-def.outputs.task-definition }}
         service: strapi-service
         cluster: strapi-cluster-v3
-        wait-for-service-stability: true
+        wait-for-service-stability: false

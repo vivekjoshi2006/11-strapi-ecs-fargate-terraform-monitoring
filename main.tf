@@ -71,7 +71,7 @@ resource "aws_ecs_cluster" "main" {
   }
 }
 
-# 6. ECS Task Definition
+# 6. Task Definition
 resource "aws_ecs_task_definition" "strapi" {
   family                   = "strapi-task"
   network_mode             = "awsvpc"
@@ -87,6 +87,16 @@ resource "aws_ecs_task_definition" "strapi" {
       image     = "811738710312.dkr.ecr.us-east-1.amazonaws.com/strapi-ecs-fargate-terraform-monitoring:latest"
       essential = true
       portMappings = [{ containerPort = 1337, hostPort = 1337 }]
+      
+      environment = [
+        { name = "NODE_ENV", value = "production" },
+        { name = "APP_KEYS", value = "1234567890123456,1234567890123456" },
+        { name = "API_TOKEN_SALT", value = "task7monitoringSalt" },
+        { name = "ADMIN_JWT_SECRET", value = "task7monitoringSecret" },
+        { name = "TRANSFER_TOKEN_SALT", value = "task7transferSalt" },
+        { name = "JWT_SECRET", value = "task7jwtSecret" }
+      ]
+
       logConfiguration = {
         logDriver = "awslogs"
         options = {
