@@ -122,3 +122,31 @@ resource "aws_ecs_service" "main" {
     assign_public_ip = true
   }
 }
+
+resource "aws_cloudwatch_dashboard" "strapi_metrics" {
+  dashboard_name = "Strapi-Monitoring-Vivek"
+  dashboard_body = jsonencode({
+    widgets = [
+      {
+        type = "metric", x = 0, y = 0, width = 12, height = 6,
+        properties = {
+          metrics = [
+            ["ECS/ContainerInsights", "CpuUtilized", "ClusterName", "strapi-cluster-v3", "ServiceName", "strapi-service"]
+          ],
+          period = 300, stat = "Average", region = "us-east-1",
+          title = "CPU Utilization (%)"
+        }
+      },
+      {
+        type = "metric", x = 12, y = 0, width = 12, height = 6,
+        properties = {
+          metrics = [
+            ["ECS/ContainerInsights", "MemoryUtilized", "ClusterName", "strapi-cluster-v3", "ServiceName", "strapi-service"]
+          ],
+          period = 300, stat = "Average", region = "us-east-1",
+          title = "Memory Utilization (MB)"
+        }
+      }
+    ]
+  })
+}
