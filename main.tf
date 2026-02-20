@@ -9,7 +9,7 @@ resource "aws_ecr_repository" "strapi" {
   force_delete         = true
 }
 
-# 2. CloudWatch Logs
+# 2. CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "strapi_logs" {
   name              = "/ecs/strapi"
   retention_in_days = 7
@@ -48,14 +48,12 @@ resource "aws_route_table_association" "a" {
 resource "aws_security_group" "strapi_sg" {
   name   = "strapi-sg"
   vpc_id = aws_vpc.main.id
-
   ingress {
     from_port   = 1337
     to_port     = 1337
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -64,17 +62,16 @@ resource "aws_security_group" "strapi_sg" {
   }
 }
 
-# 5. ECS Cluster
+# 5. ECS Cluster with Monitoring Enabled
 resource "aws_ecs_cluster" "main" {
-  name = "strapi-cluster-v3" # New name to avoid previous "idempotent" errors
-
+  name = "strapi-cluster-v3"
   setting {
     name  = "containerInsights"
     value = "enabled"
   }
 }
 
-# 6. Task Definition
+# 6. ECS Task Definition
 resource "aws_ecs_task_definition" "strapi" {
   family                   = "strapi-task"
   network_mode             = "awsvpc"
@@ -89,12 +86,7 @@ resource "aws_ecs_task_definition" "strapi" {
       name      = "strapi"
       image     = "811738710312.dkr.ecr.us-east-1.amazonaws.com/strapi-ecs-fargate-terraform-monitoring:latest"
       essential = true
-      portMappings = [
-        {
-          containerPort = 1337
-          hostPort      = 1337
-        }
-      ]
+      portMappings = [{ containerPort = 1337, hostPort = 1337 }]
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -111,10 +103,9 @@ resource "aws_ecs_task_definition" "strapi" {
 resource "aws_ecs_service" "main" {
   name            = "strapi-service"
   cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.strapi.arn # Referencing the ARN of the resource above
+  task_definition = aws_ecs_task_definition.strapi.arn
   launch_type     = "FARGATE"
   desired_count   = 1
-
   network_configuration {
     subnets          = [aws_subnet.public.id]
     security_groups  = [aws_security_group.strapi_sg.id]
