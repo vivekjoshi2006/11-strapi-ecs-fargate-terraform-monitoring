@@ -1,12 +1,21 @@
-FROM node:18-alpine
+FROM node:18-bullseye-slim
+ENV NODE_ENV=production
 WORKDIR /opt/app
 
-RUN apk update && apk add --no-cache build-base gcc autoconf automake libtool zlib-dev libpng-dev nasm bash vips-dev
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    gcc \
+    make \
+    python3 \
+    libpng-dev \
+    libvips-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+
 COPY package*.json ./
+RUN npm install --network-timeout=100000
 
-RUN npm install
 COPY . .
-
 RUN npm run build
 
 EXPOSE 1337
