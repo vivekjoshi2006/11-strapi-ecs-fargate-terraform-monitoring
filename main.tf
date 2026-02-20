@@ -9,13 +9,13 @@ resource "aws_ecr_repository" "strapi" {
   force_delete         = true
 }
 
-# 2. CloudWatch Log Group
+# 2. CloudWatch Log Group (Task 7: Logging)
 resource "aws_cloudwatch_log_group" "strapi_logs" {
   name              = "/ecs/strapi"
   retention_in_days = 7
 }
 
-# 3. Networking
+# 3. Networking (VPC, Subnet, IGW)
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
@@ -44,16 +44,18 @@ resource "aws_route_table_association" "a" {
   route_table_id = aws_route_table.rt.id
 }
 
-# 4. Security Group
+# 4. Security Group (Port 1337 for Strapi)
 resource "aws_security_group" "strapi_sg" {
   name   = "strapi-sg"
   vpc_id = aws_vpc.main.id
+
   ingress {
     from_port   = 1337
     to_port     = 1337
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -62,7 +64,7 @@ resource "aws_security_group" "strapi_sg" {
   }
 }
 
-# 5. ECS Cluster with Monitoring Enabled
+# 5. ECS Cluster
 resource "aws_ecs_cluster" "main" {
   name = "strapi-cluster-v3"
   setting {
@@ -87,7 +89,7 @@ resource "aws_ecs_task_definition" "strapi" {
       image     = "811738710312.dkr.ecr.us-east-1.amazonaws.com/strapi-ecs-fargate-terraform-monitoring:latest"
       essential = true
       portMappings = [{ containerPort = 1337, hostPort = 1337 }]
-      
+
       environment = [
         { name = "NODE_ENV", value = "production" },
         { name = "APP_KEYS", value = "1234567890123456,1234567890123456" },
@@ -109,13 +111,14 @@ resource "aws_ecs_task_definition" "strapi" {
   ])
 }
 
-# 7. ECS Service
+# 7. ECS Service (Fargate)
 resource "aws_ecs_service" "main" {
   name            = "strapi-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.strapi.arn
   launch_type     = "FARGATE"
   desired_count   = 1
+
   network_configuration {
     subnets          = [aws_subnet.public.id]
     security_groups  = [aws_security_group.strapi_sg.id]
@@ -123,28 +126,31 @@ resource "aws_ecs_service" "main" {
   }
 }
 
-resource "aws_cloudwatch_dashboard" "strapi_metrics" {
-  dashboard_name = "Strapi-Monitoring-Vivek"
+# 8. CloudWatch Dashboard
+resource "aws_cloudwatch_dashboard" "strapi_monitor" {
+  dashboard_name = "Strapi-Monitoring-Dashboard"
   dashboard_body = jsonencode({
     widgets = [
       {
         type = "metric", x = 0, y = 0, width = 12, height = 6,
         properties = {
           metrics = [
-            ["ECS/ContainerInsights", "CpuUtilized", "ClusterName", "strapi-cluster-v3", "ServiceName", "strapi-service"]
+            ["ECS/ContainerInsights", "CpuUtilized", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", aws_ecs_service.main.name],
+            ["ECS/ContainerInsights", "MemoryUtilized", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", aws_ecs_service.main.name]
           ],
           period = 300, stat = "Average", region = "us-east-1",
-          title = "CPU Utilization (%)"
+          title = "CPU & Memory Utilization"
         }
       },
       {
         type = "metric", x = 12, y = 0, width = 12, height = 6,
         properties = {
           metrics = [
-            ["ECS/ContainerInsights", "MemoryUtilized", "ClusterName", "strapi-cluster-v3", "ServiceName", "strapi-service"]
+            ["ECS/ContainerInsights", "NetworkRxBytes", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", aws_ecs_service.main.name],
+            ["ECS/ContainerInsights", "NetworkTxBytes", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", aws_ecs_service.main.name]
           ],
-          period = 300, stat = "Average", region = "us-east-1",
-          title = "Memory Utilization (MB)"
+          period = 300, stat = "Sum", region = "us-east-1",
+          title = "Network Traffic (In/Out)"
         }
       }
     ]
