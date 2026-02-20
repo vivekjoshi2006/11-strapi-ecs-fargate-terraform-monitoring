@@ -9,7 +9,7 @@ resource "aws_ecr_repository" "strapi" {
   force_delete         = true
 }
 
-# 2. CloudWatch Log Group (Task 7: Logging)
+# 2. CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "strapi_logs" {
   name              = "/ecs/strapi"
   retention_in_days = 7
